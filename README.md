@@ -31,7 +31,7 @@
   ``` bash 
    git clone https://github.com/nomad4tech/telegram-automation.git
    cd telegram-automation
-   npm clean install
+   mvn clean install
   ```
 ### Usage:
 #### TelegramLogin:

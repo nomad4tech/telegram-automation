@@ -1,8 +1,11 @@
 package tech.nomad4.utils;
 
+import com.microsoft.playwright.ElementHandle;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.options.WaitForSelectorState;
+
+import java.util.List;
 
 import static tech.nomad4.utils.CommonUtils.randomPause;
 
@@ -51,6 +54,7 @@ public class PlaywrightUtils {
         try {
             elementLocator.waitFor(new Locator.WaitForOptions().setTimeout(timeout));
         } catch (Exception e) {
+            // TODO mb it makes sense to return boolean value for more flexible event handling
             throw new RuntimeException(e);
         }
 
@@ -77,6 +81,68 @@ public class PlaywrightUtils {
 
     public static void waitAndFill(Page page, String selector, String content) {
         waitAndFill(page, selector, content, TIMEOUT);
+    }
+
+    public static List<ElementHandle> tryWaitElements(ElementHandle elementHandle,
+                                               String selector,
+                                               int timeout,
+                                               int minCount) {
+        long startTime = System.currentTimeMillis();
+        List<ElementHandle> handles;
+        while (true) {
+            handles = elementHandle.querySelectorAll(selector);
+            if (handles.size() >= minCount) {
+                return handles;
+            }
+            if (System.currentTimeMillis() - startTime > timeout) {
+                return handles;
+            }
+            randomPause(50, 100);
+        }
+    }
+
+    public static List<ElementHandle> tryWaitElements(ElementHandle elementHandle,
+                                               String selector,
+                                               int timeout) {
+        return tryWaitElements(elementHandle, selector, timeout, 1);
+    }
+
+    public static List<ElementHandle> tryWaitElements(ElementHandle elementHandle,
+                                                      String selector) {
+        return tryWaitElements(elementHandle, selector, TIMEOUT, 1);
+    }
+
+     public static List<ElementHandle> tryWaitElements(Page page,
+                                               String selector,
+                                               int timeout,
+                                               int minCount) {
+        long startTime = System.currentTimeMillis();
+        List<ElementHandle> handles;
+        while (true) {
+            handles = page.querySelectorAll(selector);
+            if (handles.size() >= minCount) {
+                return handles;
+            }
+            if (System.currentTimeMillis() - startTime > timeout) {
+                return handles;
+            }
+            randomPause(50, 100);
+        }
+    }
+
+    public static List<ElementHandle> tryWaitElements(Page page,
+                                               String selector,
+                                               int timeout) {
+        return tryWaitElements(page, selector, timeout, 1);
+    }
+
+    public static List<ElementHandle> tryWaitElements(Page page,
+                                                      String selector) {
+        return tryWaitElements(page, selector, TIMEOUT, 1);
+    }
+
+    public static void scrollToElement(ElementHandle elementHandle) {
+        elementHandle.evaluate("element => element.scrollIntoView({ behavior: 'smooth', block: 'center' });");
     }
 
 }

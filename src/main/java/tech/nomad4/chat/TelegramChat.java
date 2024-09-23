@@ -3,67 +3,109 @@ package tech.nomad4.chat;
 import com.microsoft.playwright.ElementHandle;
 import com.microsoft.playwright.Page;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import tech.nomad4.exceptions.UserNotLoggedInException;
+import tech.nomad4.login.impl.TelegramLogin;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+
+import static tech.nomad4.utils.PlaywrightUtils.*;
 
 public class TelegramChat {
 
-    public List<String> getChats(Page page) {
-        ElementHandle leftColumn = page.querySelector("#LeftColumn-main");
-        ElementHandle chatSlide = page.querySelector("div.chat-list.custom-scroll.Transition_slide.Transition_slide-active");
-        if (chatSlide != null) {
-            chatSlide.evaluate("element => element.scrollBy(0, 1000)");
-        }
+    public static final String URL_TEMPLATE = "https://web.telegram.org/a/%s";
 
-        List<ElementHandle> chatItems = page.querySelectorAll("div.chat-item-clickable");
+    public List<TelegramChatInfo> getChats(Page page) throws UserNotLoggedInException {
+        if (!TelegramLogin.isLoggedIn(page))
+            throw new UserNotLoggedInException("Page not logged IN");
 
-        List<TelegramChatInfo> infos = new ArrayList<>();
+        Set<TelegramChatInfo> all = getTelegramChatInfos(page);
+        Set<TelegramChatInfo> archive = getTelegramChatInfos(page, true);
+        all.addAll(archive);
 
-        for (int i = 1; i < chatItems.size(); i++) {
-            ElementHandle chatItem = chatItems.get(i);
-            String title = chatItem.querySelector("div.info h3").textContent();
-            String link = "https://web.telegram.org/a/" + chatItem.querySelector("a").getAttribute("href");
-            String type = parseType(chatItem);
-            String avatar = null;
-            try {
-                avatar = chatItem.querySelector("div.status div.inner img").getAttribute("src");
-            } catch (Exception e) {
-                System.out.println();
+        return new ArrayList<>(all);
+    }
+
+    private Set<TelegramChatInfo> getTelegramChatInfos(Page page) {
+        return getTelegramChatInfos(page, false);
+    }
+
+    private Set<TelegramChatInfo> getTelegramChatInfos(Page page, boolean archive) {
+        waitIsVisible(page, "div.chat-item-clickable");
+
+        List<ElementHandle> tabs = page.querySelectorAll("div.TabList.no-scrollbar div.Tab.Tab--interactive");
+
+        ElementHandle chats = tabs.stream().filter(e -> e.textContent().equalsIgnoreCase("All Chats")).findFirst().orElse(null);
+
+        Set<TelegramChatInfo> infos = new LinkedHashSet<>();
+        if (chats != null) {
+            chats.click();
+            if (archive)
+                waitAndClick(page, "div.chat-item-clickable.chat-item-archive");
+
+            int prevSize = 0;
+            for (int i = 0; i < 1000; i++) {
+                List<ElementHandle> chatItems = page.querySelectorAll("div.chat-item-clickable:not(.chat-item-archive)");
+                if (!chatItems.isEmpty()) {
+                    scrollToElement(chatItems.get(chatItems.size() - 1));
+                }
+
+                infos.addAll(chatItems.stream().map(this::getTelegramChatInfo).toList());
+
+                int size = infos.size();
+
+                if (prevSize < size) {
+                    prevSize = size;
+                } else {
+                    break;
+                }
             }
-            ElementHandle lastMessageMeta = chatItem.querySelector("div.LastMessageMeta");
-
-            TelegramChatInfo chatInfo = TelegramChatInfo.builder()
-                    .title(title)
-                    .url(link)
-                    .avatar(avatar)
-                    .type(type)
-                    .build();
-            infos.add(chatInfo);
-
         }
+        return infos;
+    }
 
-        return new ArrayList<>();
+    private TelegramChatInfo getTelegramChatInfo(ElementHandle chatItem) {
+        return TelegramChatInfo.builder()
+                .title(parseTitle(chatItem))
+                .url(parseUrl(chatItem))
+                .type(parseType(chatItem))
+                .build();
+    }
+
+    private String parseAvatar(ElementHandle chatItem) {
+        String avatar = null;
+        List<ElementHandle> elementHandles = tryWaitElements(chatItem, "div.status div.inner img", 3);
+        if (!elementHandles.isEmpty())
+            avatar = elementHandles.get(0).getAttribute("src");
+        return avatar;
+    }
+
+    private String parseTitle(ElementHandle chatItem) {
+        return chatItem.querySelector("div.info h3").textContent();
+    }
+
+    private String parseUrl(ElementHandle chatItem) {
+        return URL_TEMPLATE.formatted(chatItem.querySelector("a").getAttribute("href"));
     }
 
     private String parseType(ElementHandle chatItem) {
         String attribute = chatItem.getAttribute("class");
-
         if (attribute.contains("private"))
             return "PRIVATE";
         return "GROUP";
     }
 
-
     @Builder
     @Getter
+    @EqualsAndHashCode(of = {"url"})
     public static class TelegramChatInfo {
         private String title;
         private String url;
-        private String avatar;
         private String type;
     }
-
 
 }

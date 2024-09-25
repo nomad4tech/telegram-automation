@@ -34,6 +34,9 @@
    mvn clean install
   ```
 ### Usage:
+TODO: Add usage examples and code snippets.
+TODO: Add api documentation.
+
 #### TelegramLogin:
 To create and configure `TelegramLogin`, use the following constructor:
   ``` java
@@ -52,6 +55,8 @@ To create and configure `TelegramLogin`, use the following constructor:
   process and context storage.
 
 ## Future Development
+TODO: Add future development plans and features.
+*
 **Roadmap:** Planned features include support for additional automation tasks within Telegram, such as bot-like
 interactions.
 

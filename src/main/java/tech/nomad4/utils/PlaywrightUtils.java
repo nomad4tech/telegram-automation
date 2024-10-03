@@ -145,4 +145,14 @@ public class PlaywrightUtils {
         elementHandle.evaluate("element => element.scrollIntoView({ behavior: 'smooth', block: 'center' });");
     }
 
+    public static String waitGetContentOrNull(Page page, String selector, int timeout) {
+        Locator elementLocator = page.locator(selector);
+        try {
+            elementLocator.waitFor(new Locator.WaitForOptions().setTimeout(timeout));
+            return elementLocator.textContent();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
 }

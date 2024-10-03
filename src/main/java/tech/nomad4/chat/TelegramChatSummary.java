@@ -7,7 +7,7 @@ import lombok.*;
 @EqualsAndHashCode(of = {"url"})
 @NoArgsConstructor
 @AllArgsConstructor
-public class TelegramChatInfo {
+public class TelegramChatSummary {
     private String title;
     private String url;
     @NonNull

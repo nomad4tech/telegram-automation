@@ -66,6 +66,7 @@ public class TelegramChatDetailsFetcher {
     }
 
     private TelegramChatSummary parseChatInf(Page page) {
+        // TODO: Implement parsing chat info
         return null;
     }
 

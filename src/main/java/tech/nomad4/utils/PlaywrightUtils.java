@@ -11,6 +11,8 @@ import static tech.nomad4.utils.CommonUtils.randomPause;
 
 public class PlaywrightUtils {
 
+    public final static String EXAMPLE_URL = "http://example.com";
+
     private final static Integer TIMEOUT = 30_000;
 
     private PlaywrightUtils() { /* Prevent instantiation */ }
@@ -153,6 +155,23 @@ public class PlaywrightUtils {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    public static ElementHandle waitOrNull(Page page, String selector, int timeout) {
+        waitIsVisible(page, selector, timeout);
+        return page.querySelector(selector);
+    }
+
+    public static ElementHandle waitOrNull(Page page, String selector) {
+        return waitOrNull(page, selector, TIMEOUT);
+    }
+
+    public static void scrollTop(ElementHandle handle, int pixels) {
+        handle.evaluate("element => element.scrollTop -= " + pixels + ";");
+    }
+
+    public static void scrollDown(ElementHandle handle, int pixels) {
+        handle.evaluate("element => element.scrollTop += " + pixels + ";");
     }
 
 }

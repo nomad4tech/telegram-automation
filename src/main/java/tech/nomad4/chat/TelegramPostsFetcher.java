@@ -2,7 +2,6 @@ package tech.nomad4.chat;
 
 import com.microsoft.playwright.ElementHandle;
 import com.microsoft.playwright.Page;
-import lombok.*;
 import org.apache.commons.lang3.StringUtils;
 import tech.nomad4.exceptions.UserNotLoggedInException;
 import tech.nomad4.login.impl.TelegramLogin;
@@ -15,109 +14,76 @@ import java.util.stream.Collectors;
 
 import static tech.nomad4.utils.CommonUtils.randomPause;
 import static tech.nomad4.utils.PlaywrightUtils.*;
+import static tech.nomad4.utils.PlaywrightUtils.scrollToElement;
 
-public class TelegramChatInner {
+/**
+ * The {@code TelegramPostsFetcher} class is responsible for fetching posts from specific Telegram chat.
+ * It utilizes Playwright to navigate to given chat URL and extracts message data such as content,
+ * sender, receiver, timestamp, and media associated with each post.
+ * <p>
+ * The class ensures that the user is logged into Telegram before attempting to fetch posts. If the user
+ * is not logged in, {@link UserNotLoggedInException} is thrown.
+ * </p>
+ */
+public class TelegramPostsFetcher {
+    private static final String MESSAGE_CONTAINER_SELECTOR = "div.messages-container";
+    private static final String DATE_GROUP_SELECTOR = "div.message-date-group";
+    private static final String DATE_SELECTOR = "div.sticky-date span";
+    private static final String POSTS_SELECTOR = "div[id^='message']";
+    private static final String CONTENT_SELECTOR = "div.text-content";
+    private static final String MEDIA_IN_POST_SELECTOR = "div.content-inner div.media-inner";
+    private static final String PROFILE_PHOTO_SELECTOR = "div.profile-info div.ProfilePhoto img";
 
-    private static int MAX_POST_COUNT = 1000;
-
-    public List<TelegramPost> getPosts(TelegramChat.TelegramChatInfo chatInfo, Page page) throws UserNotLoggedInException {
+    /**
+     * Fetches limited number of postsfrom specific Telegram chat.
+     * The number of posts retrieved is determined by the {@code maxPosts} parameter,
+     * which may result in fetching fewer or more posts than specified due to the way messages
+     * are loaded and displayed in the Telegram web interface.
+     *
+     *
+     * @param chatInfo The {@link TelegramChatSummary} object containing information about the chat,
+     *                 including the URL from which to scrape posts.
+     * @param maxPosts The maximum number of posts to retrieve from the chat. The method will attempt
+     *                 to retrieve up to this number, but the actual count may vary.
+     * @param page     The Playwright {@link Page} instance representing logged-in Telegram page.
+     *                 This instance is used to navigate and interact with the web application.
+     * @return list of {@link TelegramPost} objects, each representing message in the chat.
+     *         Each object contains details such as message ID, text content, date, media content,
+     *         receiver, sender, time, and the parsed date of the message.
+     * @throws UserNotLoggedInException if user is not logged in telegram page (page is not logged in)
+     */
+    public List<TelegramPost> getPosts(TelegramChatSummary chatInfo, int maxPosts, Page page) throws UserNotLoggedInException {
         if (!TelegramLogin.isLoggedIn(page))
             throw new UserNotLoggedInException("Page not logged IN");
-        page.navigate("http://example.com");
+        page.navigate(EXAMPLE_URL);
         String url = chatInfo.getUrl();
         page.navigate(url);
 
-        if (StringUtils.equalsIgnoreCase(chatInfo.getType(), "PRIVATE")) {
-            return parsePosts(page, chatInfo.getTitle());
+        if (ChatType.PRIVATE == chatInfo.getType()) {
+            return parsePosts(page, chatInfo.getTitle(), maxPosts);
         }
 
-        return parsePosts(page);
+        return parsePosts(page, maxPosts);
     }
 
-    public TelegramChatData getData(TelegramChat.TelegramChatInfo chatInfo, Page page) throws UserNotLoggedInException {
-        if (!TelegramLogin.isLoggedIn(page))
-            throw new UserNotLoggedInException("Page not logged IN");
-        page.navigate("http://example.com");
-        String url = chatInfo.getUrl();
-        page.navigate(url);
-
-        waitAndClick(page, "div.MiddleHeader div.info");
-
-        return TelegramChatData.builder()
-                .chatInfo(parseChatInf(page))
-                .avatars(parseAvatars(page))
-                .type(parseType(page))
-                .publicLink(parsePublicLink(page))
-                .posts(parsePosts(page))
-                .subscribers(parseSubscribers(page))
-                .build();
+    private List<TelegramPost> parsePosts(Page page, int maxPosts) {
+        return parsePosts(page, null, maxPosts);
     }
 
-    private Set<TelegramChatData.Subscriber> parseSubscribers(Page page) {
-        Set<TelegramChatData.Subscriber> subscribers = new LinkedHashSet<>();
-        ElementHandle elementHandle = page.querySelector("div.shared-media div.members-list");
-
-        int prevCount = 0;
-
-        for (int i = 0; i < 10000; i++) {
-            List<ElementHandle> handles = tryWaitElements(elementHandle, "div.ListItem.chat-item-clickable.contact-list-item.scroll-item.small-icon");
-
-
-            Set<TelegramChatData.Subscriber> collect = handles.stream().map(this::parseSubscriber).collect(Collectors.toSet());
-            subscribers.addAll(collect);
-            int size = subscribers.size();
-
-            if (!handles.isEmpty()) {
-                scrollToElement(handles.get(handles.size() - 1));
-                List<ElementHandle> elementHandles = tryWaitElements(elementHandle, "div.ListItem.chat-item-clickable.contact-list-item.scroll-item.small-icon");
-                scrollToElement(elementHandles.get(elementHandles.size() - 1));
-            }
-
-
-            if (size > prevCount)
-                prevCount = size;
-            else
-                break;
-        }
-        return subscribers;
-    }
-
-    private TelegramChatData.Subscriber parseSubscriber(ElementHandle e) {
-        TelegramChatData.Subscriber subscriber = TelegramChatData.Subscriber.builder()
-                .url("")
-                .peerId(e.querySelector("div.ChatInfo div.Avatar").getAttribute("data-peer-id"))
-                .name(e.querySelector("h3").textContent())
-                .build();
-        return subscriber;
-    }
-
-    private String parsePublicLink(Page page) {
-        ElementHandle elementHandle = page.querySelector("div.ChatExtra div.ListItem-button span.title");
-        if (elementHandle != null)
-            return elementHandle.textContent();
-        return null;
-    }
-
-    private List<TelegramPost> parsePosts(Page page) {
-        return parsePosts(page, null);
-    }
-
-    private List<TelegramPost> parsePosts(Page page, String title) {
+    private List<TelegramPost> parsePosts(Page page, String title, int maxPosts) {
         Set<TelegramPost> posts = new LinkedHashSet<>();
-        waitIsVisible(page, "div.messages-container");
-        ElementHandle elementHandle = page.querySelector("div.messages-container");
+        ElementHandle elementHandle = waitOrNull(page, MESSAGE_CONTAINER_SELECTOR);
 
         int prevCount = 0;
 
         for (int i = 0; i < 10000; i++) {
-            if (MAX_POST_COUNT <= prevCount)
+            if (maxPosts <= prevCount)
                 break;
-            List<ElementHandle> dateGroup = tryWaitElements(elementHandle, "div.message-date-group");
-
+            List<ElementHandle> dateGroup = tryWaitElements(elementHandle, DATE_GROUP_SELECTOR);
 
             for (ElementHandle handle : dateGroup) {
-                String date = handle.querySelector("div.sticky-date span").textContent();
-                List<ElementHandle> postsElements = handle.querySelectorAll("div[id^='message']");
+                String date = handle.querySelector(DATE_SELECTOR).textContent();
+                List<ElementHandle> postsElements = handle.querySelectorAll(POSTS_SELECTOR);
 
                 for (ElementHandle postsElement : postsElements) {
                     TelegramPost telegramPost = parseTelegramPost(postsElement, date, title);
@@ -136,10 +102,10 @@ public class TelegramChatInner {
                 // TODO need some pauses for upload all posts
                 ElementHandle elementHandle1 = dateGroup.get(0);
                 scrollToElement(elementHandle1);
-                ElementHandle elementHandle2 = elementHandle1.querySelectorAll("div[id^='message']").get(0);
+                ElementHandle elementHandle2 = elementHandle1.querySelectorAll(POSTS_SELECTOR).get(0);
                 scrollToElement(elementHandle2);
                 randomPause(5000, 7000);
-                elementHandle2.evaluate("element => element.scrollTop = Math.max(0, element.scrollTop - 100);");
+                scrollTop(elementHandle2, 1000);
                 randomPause(5000, 7000);
             }
 
@@ -167,6 +133,7 @@ public class TelegramChatInner {
         String sender = null;
 
         ElementHandle repost = e.querySelector("div.message-subheader");
+
         if (repost != null) {
             // TODO reposted message without any mark/id
         }
@@ -203,7 +170,7 @@ public class TelegramChatInner {
     }
 
     private String parseTextContent(ElementHandle e, String time) {
-        ElementHandle elementHandle = e.querySelector("div.text-content");
+        ElementHandle elementHandle = e.querySelector(CONTENT_SELECTOR);
         if (elementHandle != null) {
             String content = elementHandle.textContent();
             return StringUtils.substringBefore(content, time);
@@ -211,11 +178,11 @@ public class TelegramChatInner {
         return null;
     }
 
-    private List<MediaContent> parseMedia(ElementHandle e) {
-        List<ElementHandle> elementHandles = e.querySelectorAll("div.content-inner div.media-inner");
-        List<MediaContent> mediaContents = new ArrayList<>();
+    private List<TelegramPost.MediaContent> parseMedia(ElementHandle e) {
+        List<ElementHandle> elementHandles = e.querySelectorAll(MEDIA_IN_POST_SELECTOR);
+        List<TelegramPost.MediaContent> mediaContents = new ArrayList<>();
         for (ElementHandle elementHandle : elementHandles) {
-            MediaContent mc = new MediaContent();
+            TelegramPost.MediaContent mc = new TelegramPost.MediaContent();
             mc.setMediaId(elementHandle.getAttribute("id"));
             mediaContents.add(mc);
 
@@ -263,83 +230,11 @@ public class TelegramChatInner {
         return dateTime.atZone(ZoneId.systemDefault()).toInstant();
     }
 
-    private String parseType(Page page) {
-        String info = page.querySelector("div.RightHeader h3").textContent();
-        return StringUtils.substringBefore(info, " ");
-    }
-
     private List<String> parseAvatars(Page page) {
         // TODO sometimes one of avatar is null
-        var res = tryWaitElements(page, "div.profile-info div.ProfilePhoto img");
+        var res = tryWaitElements(page, PROFILE_PHOTO_SELECTOR);
         return res.stream()
                 .map(e -> e.getAttribute("src"))
                 .toList();
     }
-
-    private TelegramChat.TelegramChatInfo parseChatInf(Page page) {
-        return null;
-    }
-
-    @Getter
-    @Builder
-    public static class TelegramChatData {
-
-        private TelegramChat.TelegramChatInfo chatInfo;
-
-        private String type;
-
-        private String publicLink;
-
-        private Set<Subscriber> subscribers;
-
-        private List<String> avatars;
-
-        private List<TelegramPost> posts;
-
-        @Getter
-        @Builder
-        @EqualsAndHashCode(of = {"peerId"})
-        static class Subscriber {
-
-            private String url;
-
-            private String peerId;
-
-            private String name;
-
-        }
-
-
-    }
-
-    @Getter
-    @Setter
-    @Builder
-    @EqualsAndHashCode(of = {"messageId"})
-    public static class TelegramPost {
-
-        private Long messageId;
-
-        private String date;
-        private Instant parsedDate;
-
-        private String time;
-
-        private String textContent;
-
-        private String sender;
-
-        private String receiver;
-
-        private List<MediaContent> media;
-
-    }
-
-    @Data
-    public static class MediaContent {
-        private String type;
-
-        private String mediaId;
-    }
-
 }

@@ -9,6 +9,15 @@ import java.util.*;
 
 import static tech.nomad4.utils.PlaywrightUtils.*;
 
+/**
+ * The {@code TelegramChatFetcher} class is responsible for retrieving chat information
+ * from the Telegram web application. It can fetch both active and archived chats,
+ * providing details such as the title, URL, and type (private or group) of each chat.
+ * <p>
+ * The class ensures that the user is logged into Telegram before attempting to fetch posts. If the user
+ * is not logged in, {@link UserNotLoggedInException} is thrown.
+ * </p>
+ */
 public class TelegramChatFetcher {
 
     private static final String URL_TEMPLATE = "https://web.telegram.org/a/%s";
@@ -20,10 +29,11 @@ public class TelegramChatFetcher {
     public static final String CHAT_ITEM_CLICKABLE = "div.chat-item-clickable";
 
     /**
-     * Get all chats from telegram page
+     * Retrieves list of all chats from the Telegram web page, including archived chats.
      *
-     * @param page playwrite page logged in telegram page
-     * @return list of chats with title, url and type (private or group) of chat included archive chats
+     * @param page     The Playwright {@link Page} instance representing logged-in Telegram page.
+     *                 This instance is used to navigate and interact with the web application.
+     * @return list of {@link TelegramChatSummary} objects with title, url and type (private or group) of chat included archive chats
      * @throws UserNotLoggedInException if user is not logged in telegram page (page is not logged in)
      */
     public List<TelegramChatSummary> getChats(Page page) throws UserNotLoggedInException {
